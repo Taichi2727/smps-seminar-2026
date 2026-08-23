@@ -1,0 +1,48 @@
+name: 公開期間終了で自動クローズ
+
+# 毎日 15:00 UTC(日本時間 0:00)にチェックし,
+# 2026-09-24 15:00 UTC(= 9/25 0:00 JST)以降ならサイトを閉鎖ページに置き換える
+on:
+  schedule:
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  takedown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 期限判定と閉鎖処理
+        run: |
+          DEADLINE="2026-09-24T15:00:00Z"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ -f CLOSED ]; then
+            echo "既に閉鎖済みです"; exit 0
+          fi
+          if [ "$NOW" \< "$DEADLINE" ]; then
+            echo "公開期間中($NOW < $DEADLINE)"; exit 0
+          fi
+          echo "公開期間終了。サイトを閉鎖ページに置き換えます"
+          find . -maxdepth 2 -name "*.html" -not -path "./.git/*" -delete
+          rm -rf css js chapters
+          cat > index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="ja">
+          <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>公開期間終了</title></head>
+          <body style="font-family:sans-serif;text-align:center;padding:4rem 1rem;color:#444;">
+          <h1>公開期間は終了しました</h1>
+          <p>本サイトの公開は 2026年9月24日 をもって終了いたしました。<br>
+          ご利用ありがとうございました。</p>
+          </body></html>
+          EOF
+          touch CLOSED
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "公開期間終了によるサイト閉鎖(自動)"
+          git push
